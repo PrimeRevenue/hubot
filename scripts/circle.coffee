@@ -1,5 +1,6 @@
 module.exports = (robot) ->
   github = require('githubot')(robot)
+  http = require 'scoped-http-client'
 
   robot.router.post "/hubot/circle", (req, res) ->
     repo_url = req.body.vcs_url.split('/')
@@ -49,12 +50,23 @@ module.exports = (robot) ->
         "QUnit tests: #{qunit_tests} tests run, #{qunit_failures} failed\n"
 
       pull_message =
-        "#{status_emoji} Circle build: #{status}\n\n" +
-        test_status
+        "#{status_emoji} Circle build: #{status}\\n\\n" +
+        "RSpec tests: #{rspec_tests} tests run, #{rspec_failures} failed\\n" +
+        "Coverage: #{coverage}\\n" +
+        "QUnit tests: #{qunit_tests} tests run, #{qunit_failures} failed\\n"
 
       if pull_request?
-        comment = {body: pull_message}
-        github.post "/repos/#{repo}/issues/#{pull_request.number}/comments"
+        comment = "{ \"body\": \"#{pull_message}\" }"
+        url = "https://api.github.com" + "/repos/#{repo}/issues/#{pull_request.number}/comments"
+        req = http.create(url)
+        req = req.header('Authorization', "token #{oauth_token}") if (oauth_token = process.env.HUBOT_GITHUB_TOKEN)?
+        req = req.header('Accept', 'application/json')
+        req = req.header('Content-Type', 'application/json')
+
+        req.post(comment)((error, rsp, body) ->
+          console.log "Request: " + comment
+          console.log "Response: " + body
+        )
 
       robot.send user, "[Circle] Build #{status} on #{repo_name} at #{branch} #{req_msg}", test_status
 

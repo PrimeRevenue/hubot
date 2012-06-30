@@ -18,7 +18,8 @@
     "hubot": "2.2.1",
     "hubot-scripts": ">=2.0.8",
     "githubot": ">=0.2.0",
-    "optparse": "1.0.3"
+    "optparse": "1.0.3",
+    "scoped-http-client": ">=0.9.7"
   },
 
   "engines": {
