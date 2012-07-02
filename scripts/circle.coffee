@@ -3,20 +3,29 @@ module.exports = (robot) ->
   http = require 'scoped-http-client'
 
   robot.router.post "/hubot/circle", (req, res) ->
-    repo_url = req.body.vcs_url.split('/')
+    repo_url = req.body.payload.vcs_url.split('/')
     repo_name = repo_url.pop()
     owner_name = repo_url.pop()
-    branch = req.body.branch
-    failed = req.body.failed
+    branch = req.body.payload.branch
+    failed = req.body.payload.failed
 
     repo = github.qualified_repo "#{owner_name}/#{repo_name}"
 
-    github.get "/repos/#{repo}/pulls", (pulls) =>
+    url = "https://api.github.com" + "/repos/#{repo}/pulls"
+    github_req = http.create(url)
+    github_req = github_req.header('Authorization', "token #{oauth_token}") if (oauth_token = process.env.HUBOT_GITHUB_TOKEN)?
+    github_req = github_req.header('Accept', 'application/json')
+    github_req = github_req.header('Content-Type', 'application/json')
+
+    github_req.get()((error, rsp, body) ->
       pull_request = null
+
+      pulls = JSON.parse body if body?
       
-      for pull in pulls
-        if pull.head.ref == branch
-          pull_request = pull
+      if pulls?
+        for pull in pulls
+          if pull.head.ref == branch
+            pull_request = pull
 
       user = robot.userForId 'broadcast'
       user.room = '512532'
@@ -30,8 +39,11 @@ module.exports = (robot) ->
         else
           ""
 
-      for action in req.body.action_logs
+      console.log req.body.payload.action_logs
+
+      for action in req.body.payload.action_logs
         if action.bash_command? && action.bash_command.indexOf('bundle exec rspec') != -1
+          console.log action.out
           for out in action.out
             if out.message? && result = out.message.match(/([0-9]+) examples, ([0-9]+) failure/)
               rspec_tests = result[1]
@@ -39,6 +51,7 @@ module.exports = (robot) ->
             else if out.message? && result = out.message.match(/Coverage report generated for RSpec.*LOC \(([0-9]+\.[0-9]+%)\) covered/)
               coverage = result[1]
         else if action.bash_command? && action.bash_command.indexOf('phantomjs') != -1
+          console.log action.out
           for out in action.out
             if out.message? && result = out.message.match(/Total: ([0-9]+), Passed: [0-9]+, Failed: ([0-9]+)/)
               qunit_tests = result[1]
@@ -72,3 +85,4 @@ module.exports = (robot) ->
 
       res.writeHead 200, {'Content-Type': 'text/plain'}
       res.end 'Thanks'
+    )
