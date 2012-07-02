@@ -39,50 +39,57 @@ module.exports = (robot) ->
         else
           ""
 
-      console.log req.body.payload.action_logs
+      url = "https://circleci.com/api/v1/project/#{owner_name}/#{repo_name}/#{req.body.payload.build_num}"
+      circle_req = http.create(url)
+      circle_req = circle_req.header('Accept', 'application/json')
+      circle_req = circle_req.header('Content-Type', 'application/json')
 
-      for action in req.body.payload.action_logs
-        if action.bash_command? && action.bash_command.indexOf('bundle exec rspec') != -1
-          console.log action.out
-          for out in action.out
-            if out.message? && result = out.message.match(/([0-9]+) examples, ([0-9]+) failure/)
-              rspec_tests = result[1]
-              rspec_failures = result[2]
-            else if out.message? && result = out.message.match(/Coverage report generated for RSpec.*LOC \(([0-9]+\.[0-9]+%)\) covered/)
-              coverage = result[1]
-        else if action.bash_command? && action.bash_command.indexOf('phantomjs') != -1
-          console.log action.out
-          for out in action.out
-            if out.message? && result = out.message.match(/Total: ([0-9]+), Passed: [0-9]+, Failed: ([0-9]+)/)
-              qunit_tests = result[1]
-              qunit_failures = result[2]
+      circle_req.get()((error, rsp, body) ->
+        build = JSON.parse body if body?
 
-      test_status =
-        "RSpec tests: #{rspec_tests} tests run, #{rspec_failures} failed\n" +
-        "Coverage: #{coverage}\n" +
-        "QUnit tests: #{qunit_tests} tests run, #{qunit_failures} failed\n"
+        for action in build.action_logs
+          if action.bash_command? && action.bash_command.indexOf('bundle exec rspec') != -1
+            console.log action.out
+            for out in action.out
+              if out.message? && result = out.message.match(/([0-9]+) examples, ([0-9]+) failure/)
+                rspec_tests = result[1]
+                rspec_failures = result[2]
+              else if out.message? && result = out.message.match(/Coverage report generated for RSpec.*LOC \(([0-9]+\.[0-9]+%)\) covered/)
+                coverage = result[1]
+          else if action.bash_command? && action.bash_command.indexOf('phantomjs') != -1
+            console.log action.out
+            for out in action.out
+              if out.message? && result = out.message.match(/Total: ([0-9]+), Passed: [0-9]+, Failed: ([0-9]+)/)
+                qunit_tests = result[1]
+                qunit_failures = result[2]
 
-      pull_message =
-        "#{status_emoji} Circle build: #{status}\\n\\n" +
-        "RSpec tests: #{rspec_tests} tests run, #{rspec_failures} failed\\n" +
-        "Coverage: #{coverage}\\n" +
-        "QUnit tests: #{qunit_tests} tests run, #{qunit_failures} failed\\n"
+        test_status =
+          "RSpec tests: #{rspec_tests} tests run, #{rspec_failures} failed\n" +
+          "Coverage: #{coverage}\n" +
+          "QUnit tests: #{qunit_tests} tests run, #{qunit_failures} failed\n"
 
-      if pull_request?
-        comment = "{ \"body\": \"#{pull_message}\" }"
-        url = "https://api.github.com" + "/repos/#{repo}/issues/#{pull_request.number}/comments"
-        req = http.create(url)
-        req = req.header('Authorization', "token #{oauth_token}") if (oauth_token = process.env.HUBOT_GITHUB_TOKEN)?
-        req = req.header('Accept', 'application/json')
-        req = req.header('Content-Type', 'application/json')
+        pull_message =
+          "#{status_emoji} Circle build: #{status}\\n\\n" +
+          "RSpec tests: #{rspec_tests} tests run, #{rspec_failures} failed\\n" +
+          "Coverage: #{coverage}\\n" +
+          "QUnit tests: #{qunit_tests} tests run, #{qunit_failures} failed\\n"
 
-        req.post(comment)((error, rsp, body) ->
-          console.log "Request: " + comment
-          console.log "Response: " + body
-        )
+        if pull_request?
+          comment = "{ \"body\": \"#{pull_message}\" }"
+          url = "https://api.github.com" + "/repos/#{repo}/issues/#{pull_request.number}/comments"
+          req = http.create(url)
+          req = req.header('Authorization', "token #{oauth_token}") if (oauth_token = process.env.HUBOT_GITHUB_TOKEN)?
+          req = req.header('Accept', 'application/json')
+          req = req.header('Content-Type', 'application/json')
 
-      robot.send user, "[Circle] Build #{status} on #{repo_name} at #{branch} #{req_msg}", test_status
+          req.post(comment)((error, rsp, body) ->
+            console.log "Request: " + comment
+            console.log "Response: " + body
+          )
 
-      res.writeHead 200, {'Content-Type': 'text/plain'}
-      res.end 'Thanks'
+        robot.send user, "[Circle] Build #{status} on #{repo_name} at #{branch} #{req_msg}", test_status
+
+        res.writeHead 200, {'Content-Type': 'text/plain'}
+        res.end 'Thanks'
+      )
     )
