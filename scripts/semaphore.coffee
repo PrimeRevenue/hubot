@@ -1,7 +1,7 @@
 module.exports = (robot) ->
   http = require 'scoped-http-client'
 
-  robot.hear /\[([^\/]+)\/(.+)\] (Passed|Failed): \((https:\/\/semaphoreapp\.com\/projects.*)\)/, (msg) ->
+  robot.hear /\[([^\/]+)\/(.+)\] (Passed|Failed):.*\((https:\/\/semaphoreapp\.com\/projects.*)\)/, (msg) ->
     repo = msg.match[1]
     branch = msg.match[2]
     failed = msg.match[3] == 'Failed'
